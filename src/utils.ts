@@ -80,8 +80,11 @@ export async function sign(file: string) {
   try {
     const signtool = await getSignToolPath();
     // signtool.exe sign /v /fd sha256 /a "file"
-    const { stdout } = await execAsync(`${signtool} sign /v /fd sha256 /a "${file}"`);
-    console.log(stdout); 
+    const command = `"${signtool}" sign /v /fd sha256 /a "${file}"`;
+    console.log(command);
+    const { stdout, stderr } = await execAsync(command);
+    console.log(stdout);
+    console.log(stderr);
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
@@ -99,7 +102,10 @@ export async function getSignToolPath(): Promise<string> {
 
   while (directories.length > 0) {
     const directory = directories.pop() as string;
-    const files = await fs.readdir(directory);
+    let files = await fs.readdir(directory);
+
+    // Sort files in descending order to get the latest version and prefer x64
+    files = files.sort().reverse();
 
     for (const file of files) {
       const absolutePath = path.join(directory, file);

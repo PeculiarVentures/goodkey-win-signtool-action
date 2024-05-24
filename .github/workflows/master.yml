@@ -8,13 +8,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Create test file
-        run: echo "Hello, world!" > test.txt
+        run: |
+          copy C:\Windows\System32\wmi.dll . 
       - name: Run the action
         uses: ./
         with:
           organization: ${{ secrets.ORGANIZATION }}
           token: ${{ secrets.TOKEN }}
-          file: "test.txt"
-      - name: Check the output
-        run: cat test.txt
+          file: "wmi.dll"
           
