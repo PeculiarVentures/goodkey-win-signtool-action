@@ -1,0 +1,19 @@
+name: "GoodKey Windows Code Signing"
+description: "Automated code signing for Windows using the GoodKey service."
+branding:
+  icon: "lock"
+  color: "green"
+inputs:
+  certificate:
+    description: "The ID of the certificate from the GoodKey server."
+    required: true
+  file:
+    description: "The file to sign."
+    required: true
+  token:
+    description: "The access token for the GoodKey server."
+    required: true
+
+runs:
+  using: "node20"
+  main: "dist/index.js"
