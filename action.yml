@@ -10,6 +10,9 @@ inputs:
   token:
     description: "The GoodKey API token."
     required: true
+  file:
+    description: "The file to sign."
+    required: true
 
 runs:
   using: "node20"

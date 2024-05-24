@@ -51,8 +51,9 @@ export async function installGoodKey(distDir: string, systemDir: string) {
     }
 
     // Get User status using `gkutils auth status` and log it
-    const { stdout } = await execAsync(`${path.join(systemDir, utilFile)} auth status`);
-    console.log(stdout);
+    // const { stdout } = await execAsync(`${path.join(systemDir, utilFile)} auth status`);
+    // console.log(stdout);
+    // Error: Installation of GoodKey failed: rpc error: code = Unknown desc = Client for GoodKey Server is not initialized. Run 'gkutils auth register' to authenticate.
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
@@ -73,4 +74,44 @@ export async function registerUser(token: string, organizationId: string) {
     }
     throw error;
   }
+}
+
+export async function sign(file: string) {
+  try {
+    const signtool = await getSignToolPath();
+    // signtool.exe sign /v /fd sha256 /a "file"
+    const { stdout } = await execAsync(`${signtool} sign /v /fd sha256 /a "${file}"`);
+    console.log(stdout); 
+  } catch (error) {
+    if (error instanceof Error) {
+      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
+      throw new Error(`Signing of file failed: ${message}`);
+    }
+    throw error;
+  }
+}
+
+export async function getSignToolPath(): Promise<string> {
+  const rootDir = 'C:\\Program Files (x86)\\Windows Kits';
+  const signtoolName = 'signtool.exe';
+
+  const directories = [rootDir];
+
+  while (directories.length > 0) {
+    const directory = directories.pop() as string;
+    const files = await fs.readdir(directory);
+
+    for (const file of files) {
+      const absolutePath = path.join(directory, file);
+
+      const stat = await fs.stat(absolutePath);
+      if (file === signtoolName && stat.isFile()) {
+        return absolutePath;
+      } else if (stat.isDirectory()) {
+        directories.push(absolutePath);
+      }
+    }
+  }
+
+  throw new Error('signtool.exe not found');
 }
