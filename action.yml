@@ -4,15 +4,9 @@ branding:
   icon: "lock"
   color: "green"
 inputs:
-  certificate:
-    description: "The ID of the certificate from the GoodKey server."
-    required: true
-  file:
-    description: "The file to sign."
-    required: true
-  token:
-    description: "The access token for the GoodKey server."
-    required: true
+  organization:
+    description: "The organization identifier."
+    required: false
 
 runs:
   using: "node20"
