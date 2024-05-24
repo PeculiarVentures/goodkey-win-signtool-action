@@ -6,7 +6,10 @@ branding:
 inputs:
   organization:
     description: "The organization identifier."
-    required: false
+    required: true
+  token:
+    description: "The GoodKey API token."
+    required: true
 
 runs:
   using: "node20"

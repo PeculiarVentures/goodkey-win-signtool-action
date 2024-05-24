@@ -1,6 +1,9 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
+import { promisify } from 'util';
+
+export const SYSTEM_ROOT = process.env['SystemRoot'] || 'C:\\Windows';
 
 const serviceFile = 'gksvc.exe';
 const keyProvFile = 'gkcng.dll';
@@ -8,21 +11,45 @@ const certProvFile = 'gkcertsvc.dll';
 const utilFile = 'gkutils.exe';
 const allFiles = [serviceFile, keyProvFile, certProvFile, utilFile];
 
+const execAsync = promisify(exec);
+
 export async function installGoodKey(distDir: string, systemDir: string) {
-  for (const file of allFiles) {
-    const srcPath = path.join(distDir, file);
-    const destPath = path.join(systemDir, file);
-    await fs.copyFile(srcPath, destPath);
+  try {
+
+    for (const file of allFiles) {
+      const srcPath = path.join(distDir, file);
+      const destPath = path.join(systemDir, file);
+      await fs.copyFile(srcPath, destPath);
+    }
+
+    // Register DLLs
+    await execAsync(`regsvr32.exe /s "${path.join(systemDir, keyProvFile)}"`);
+    await execAsync(`regsvr32.exe /s "${path.join(systemDir, certProvFile)}"`);
+
+    // Install service
+    await execAsync(`sc create gksvc binPath= "${path.join(systemDir, serviceFile)}" start= auto`);
+
+    // Get User status using `gkutils auth status` and log it
+    const { stdout } = await execAsync(`${path.join(systemDir, utilFile)} auth status`);
+    console.log(stdout);
+  } catch (error) {
+    if (error instanceof Error) {
+      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
+      throw new Error(`Installation of GoodKey failed: ${message}`);
+    }
+    throw error;
   }
+}
 
-  // Register DLLs
-  await exec(`regsvr32.exe /s "${path.join(systemDir, keyProvFile)}"`);
-  await exec(`regsvr32.exe /s "${path.join(systemDir, certProvFile)}"`);
-
-  // Install service
-  await exec(`sc create gksvc binPath= "${path.join(systemDir, serviceFile)}" start= auto`);
-
-  // Get User status using gkutils
-  const { stdout } = await exec(`${path.join(systemDir, utilFile)} auth status`);
-  console.log(stdout);
+export async function registerUser(token: string, organizationId: string) {
+  try {
+    const { stdout } = await execAsync(`${path.join(SYSTEM_ROOT, 'System32', utilFile)} auth register -t ${token} -o ${organizationId}`);
+    console.log(stdout);
+  } catch (error) {
+    if (error instanceof Error) {
+      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
+      throw new Error(`Registration of user failed: ${message}`);
+    }
+    throw error;
+  }
 }
