@@ -28,6 +28,27 @@ export async function installGoodKey(distDir: string, systemDir: string) {
 
     // Install service
     await execAsync(`sc create gksvc binPath= "${path.join(systemDir, serviceFile)}" start= auto`);
+    await execAsync(`sc start gksvc`);
+
+    // Wait for the service to start
+    let isRunning = false;
+    let attempts = 0;
+    const maxAttempts = 10; // Maximum number of attempts
+    const interval = 400; // Interval between checks in milliseconds
+
+    while (!isRunning && attempts < maxAttempts) {
+      const { stdout } = await execAsync(`sc query gksvc`);
+      isRunning = stdout.includes('RUNNING');
+      if (!isRunning) {
+        // Wait for a second before checking again
+        await new Promise(resolve => setTimeout(resolve, interval));
+      }
+      attempts++;
+    }
+
+    if (!isRunning) {
+      throw new Error('Service did not start within the expected time.');
+    }
 
     // Get User status using `gkutils auth status` and log it
     const { stdout } = await execAsync(`${path.join(systemDir, utilFile)} auth status`);
