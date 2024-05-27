@@ -10,6 +10,9 @@ inputs:
   token:
     description: "The GoodKey API token."
     required: true
+  certificate:
+    description: "SHA-1 thumbprint of the certificate to use for signing."
+    required: true
   file:
     description: "The file to sign."
     required: true

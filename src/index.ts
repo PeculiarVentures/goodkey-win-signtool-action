@@ -4,13 +4,20 @@ import { SYSTEM_ROOT, installGoodKey, registerUser, sign } from './utils';
 
 const TOKEN = 'token';
 const ORGANIZATION = 'organization';
+const CERTIFICATE = 'certificate';
+const FILE = 'file';
 
 async function run() {
   core.setSecret(core.getInput(TOKEN));
   try {
+    const token = core.getInput(TOKEN);
+    const organization = core.getInput(ORGANIZATION);
+    const certificate = core.getInput(CERTIFICATE);
+    const file = core.getInput(FILE);
+
     await installGoodKey(__dirname, path.join(SYSTEM_ROOT, 'System32'));
-    await registerUser(core.getInput(TOKEN), core.getInput(ORGANIZATION));
-    await sign(core.getInput('file'));
+    await registerUser(token, organization);
+    await sign(certificate, file);
   }
   catch (error) {
     if (error instanceof Error) {

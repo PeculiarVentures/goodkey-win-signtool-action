@@ -15,5 +15,6 @@ jobs:
         with:
           organization: ${{ secrets.ORGANIZATION }}
           token: ${{ secrets.TOKEN }}
+          certificate: "224b501264c1454d4627268297670451aed3b0d9"
           file: "wmi.dll"
           

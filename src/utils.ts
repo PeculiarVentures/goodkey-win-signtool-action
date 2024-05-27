@@ -76,12 +76,11 @@ export async function registerUser(token: string, organizationId: string) {
   }
 }
 
-export async function sign(file: string) {
+export async function sign(certificate: string, file: string) {
   try {
     const signtool = await getSignToolPath();
-    // signtool.exe sign /v /fd sha256 /a "file"
-    const command = `"${signtool}" sign /v /fd sha256 /a "${file}"`;
-    console.log(command);
+    // signtool.exe sign /v /fd sha256 /a "file" /sha1 "hex(sha1(cert))"
+    const command = `"${signtool}" sign /v /fd sha256 /a "${file} /sha1 ${certificate}"`;
     const { stdout, stderr } = await execAsync(command);
     console.log(stdout);
     console.log(stderr);
