@@ -109,7 +109,6 @@ export async function sign(options: SignOptions) {
       const certs = new X509Certificates(options.additionalCertificates);
 
       const ac: string[] = [];
-      args['ac'] = ac;
       // Write file for each certificate
       for (const cert of certs) {
         const thumbprint = await cert.getThumbprint();
@@ -117,6 +116,7 @@ export async function sign(options: SignOptions) {
         await fs.writeFile(certFile, Buffer.from(new Uint8Array(cert.rawData)));
         ac.push(certFile);
       }
+      args['ac'] = ac;
     }
     if (options.fileDigestAlgorithm) {
       args['fd'] = options.fileDigestAlgorithm;
