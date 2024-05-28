@@ -17,4 +17,46 @@ jobs:
           token: ${{ secrets.TOKEN }}
           certificate: "224b501264c1454d4627268297670451aed3b0d9"
           file: "wmi.dll"
+          timestamp_rfc3161_url: "http://timestamp.digicert.com"
+          description: "This is a test file"
+          description_url: "https://example.com"
+          file_digest_algorithm: "sha256"
+          additional_certificates: |
+            -----BEGIN CERTIFICATE-----
+            MIIC+jCCAeKgAwIBAgIJAPxyG3fzY7RuMA0GCSqGSIb3DQEBCwUAMCsxKTAnBgNV
+            BAMMIFl1YmljbyBQSVYgUm9vdCBDQSBTZXJpYWwgMjYzNzUxMCAXDTE2MDMxNDAw
+            MDAwMFoYDzIwNTIwNDE3MDAwMDAwWjAhMR8wHQYDVQQDDBZZdWJpY28gUElWIEF0
+            dGVzdGF0aW9uMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0PeoUrod
+            eXbrxtDAZOjngEQXFg4LRv4xXGsPLqfrZzP7mkx15tJHECxK3OSLmBj+nAQU3jge
+            WH2z5cm8dsodluG0uWXC/bDyMFocHX2DAeZgS9pyC/Te9//Ofbxj4IcGYyYVlh1w
+            6VbUi0NVTW2B9KeN+sRf5pzMwRsVgjXiVN0Qps3D6zc/YkHvlVKdnJfrOdCCukVh
+            2DJIcA1GF31sSQ+h6MsQ5AliSMBw2a6hy6glJLjwh8dcRIqyesmbEZ16VzgtcCoo
+            SmQelUNMTKtjgcB7FiKqTvRV5iybN4w83UCXjvnugMoW8uE79qENlzIfsCvhw86N
+            gFn6gHXtl7/IXQIDAQABoykwJzARBgorBgEEAYLECgMDBAMFBAMwEgYDVR0TAQH/
+            BAgwBgEB/wIBADANBgkqhkiG9w0BAQsFAAOCAQEAnq3bvZIOKoOYLVgKCN/3lMxi
+            D9/w6F/Ji5mX/kMH+J5xe3+qRZHg/cwu5eBUJmMpp4cV1P3yjgXm+nGza6QUnIHy
+            MByI/Pt05CfUKukHX5i+mi8W6QDfFIZaET4TYaWUrdq1pwmdKv7sUNz5ayGh/SPw
+            MnvHTd4kKrKQoMcbi6q4ZJBkoo5TiMBSWQY8VNWaSwkxFDQvYw5OX+tVEsOZHdGG
+            ApX5/8LmJjz5pTGWJElcGfrOUnGb+2mgTHRPSoDkmNmw9QowMS0bR2OUy52lzrMY
+            fpIcfcthH+kHsUueyMaLnhaCldR21SCKbTSHnVfbMCj7jX1B04ByAVGl8jjELA==
+            -----END CERTIFICATE-----
+            -----BEGIN CERTIFICATE-----
+            MIIDGjCCAdKgAwIBAgIQRn3HOtVa3TwwUy8qSadfnTA9BgkqhkiG9w0BAQowMKAN
+            MAsGCWCGSAFlAwQCAaEaMBgGCSqGSIb3DQEBCDALBglghkgBZQMEAgGiAwIBIDAX
+            MRUwEwYDVQQDEwxSb290IFJTQS1QU1MwHhcNMjQwNTIxMTkyMDI4WhcNMjUwNTIx
+            MTkyMDI4WjAXMRUwEwYDVQQDEwxSb290IFJTQS1QU1MwggEiMA0GCSqGSIb3DQEB
+            AQUAA4IBDwAwggEKAoIBAQC2ZvytXFFnM9R+SI6k0q2TCeDd3KL1T9iYUJZjIn97
+            kTMsGVer36rGq02powV78vHg1kzOJnaNT1E41jWhXTbHmO7LH3HXgNhX7lzGaiyW
+            1IUXSvHi+0MJ413NTN87mM/I8ytSErLWB4hp+lXwLolKOm039NCthtHyqvWD0svL
+            Img2QYjVB2zd2RKpCJ9hehibX8/NXnF9YbH5m+me293Oqpr6hP2HfgsH1pMCi0tf
+            qMlEf6KTaPeCOzv55Czd+2ZUduyMK25UhZGnv7uTdzg4qrdqmSCaTJszmn4u96ao
+            Hr0c2o2BX5Tc6YuW18v4ZAaXabXh7xx4O8JycUC9EnYPAgMBAAGjAjAAMD0GCSqG
+            SIb3DQEBCjAwoA0wCwYJYIZIAWUDBAIBoRowGAYJKoZIhvcNAQEIMAsGCWCGSAFl
+            AwQCAaIDAgEgA4IBAQADUfUGFF5Eenww/ykYuLgvXbHOSduQp5k46f+2V7FLFm7B
+            hWn3GaJ7AOeiJSW0bo8tbbnfig0SP5SMGcOFeupcZ4BNQfUyGFOlAwZWmJusocjL
+            uQrn3CAewZkAlUPrqWZ41z+sprQ91pF7rPI+hBZqpRBB1kk3LZBlGMUAsJKUfPgn
+            d3N+LYBOYtea2yJkK1VCbSXiHZcCwIhtHtqmFDT37CmKvyK0B6LcZmOqUKgEiIcn
+            f/y4bFQXfM9/WPYAoUQ33MzXJLzcgW868RPIdHMAaVwnoydk4xJ/OizW/o+v6GM4
+            WhYrT4bEyP5IwLn08Nt9VUjLNrHaYYb5c+A+gmcw
+            -----END CERTIFICATE-----
           

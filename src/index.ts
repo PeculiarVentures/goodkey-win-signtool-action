@@ -17,7 +17,15 @@ async function run() {
 
     await installGoodKey(__dirname, path.join(SYSTEM_ROOT, 'System32'));
     await registerUser(token, organization);
-    await sign(certificate, file);
+    await sign({
+      file,
+      certificate,
+      timestampUrl: core.getInput('timestamp_url') || undefined,
+      description: core.getInput('description') || undefined,
+      descriptionUrl: core.getInput('description_url') || undefined,
+      additionalCertificates: core.getInput('additional_certificate') || undefined,
+      fileDigestAlgorithm: core.getInput('file_digest_algorithm') || undefined,
+    });
   }
   catch (error) {
     if (error instanceof Error) {

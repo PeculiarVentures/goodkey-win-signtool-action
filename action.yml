@@ -16,6 +16,30 @@ inputs:
   file:
     description: "The file to sign."
     required: true
+  timestamp_url:
+    description: "The URL of the time stamp server."
+    required: false
+    default: ""
+  timestamp_rfc3161_url:
+    description: "The URL of the RFC 3161 time stamp server."
+    required: false
+    default: ""
+  description:
+    description: "Specifies a description of the signed content."
+    required: false
+    default: ""
+  description_url:
+    description: "Specifies a URL for the expanded description of the signed content."
+    required: false
+    default: ""
+  additional_certificates:
+    description: "List of additional certificates to include in the signature. The certificates should be in a PEM chain format, with each certificate enclosed between 'BEGIN CERTIFICATE' and 'END CERTIFICATE' lines, without any additional characters or spaces."
+    required: false
+    default: ""
+  file_digest_algorithm:
+    description: "Specifies the file digest algorithm to use for creating file signatures."
+    required: false
+    default: "sha256"
 
 runs:
   using: "node20"

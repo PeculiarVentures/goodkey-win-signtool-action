@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { X509Certificates } from "@peculiar/x509";
 
 export const SYSTEM_ROOT = process.env['SystemRoot'] || 'C:\\Windows';
 
@@ -76,11 +77,65 @@ export async function registerUser(token: string, organizationId: string) {
   }
 }
 
-export async function sign(certificate: string, file: string) {
+export interface SignOptions {
+  file: string;
+  certificate: string;
+  timestampUrl?: string;
+  timestampRfc3161Url?: string;
+  description?: string;
+  descriptionUrl?: string;
+  additionalCertificates?: string;
+  fileDigestAlgorithm?: string;
+}
+
+export async function sign(options: SignOptions) {
   try {
     const signtool = await getSignToolPath();
     // signtool.exe sign /v /fd sha256 /a "file" /sha1 "hex(sha1(cert))"
-    const command = `"${signtool}" sign /v /fd sha256 /a "${file} /sha1 ${certificate}"`;
+    const args: Record<string, string | string[]> = {};
+    if (options.timestampUrl) {
+      args['t'] = options.timestampUrl;
+    }
+    if (options.timestampRfc3161Url) {
+      args['tr'] = options.timestampRfc3161Url;
+    }
+    if (options.description) {
+      args['d'] = options.description;
+    }
+    if (options.descriptionUrl) {
+      args['du'] = options.descriptionUrl;
+    }
+    if (options.additionalCertificates) {
+      const certs = new X509Certificates(options.additionalCertificates);
+
+      const ac: string[] = [];
+      args['ac'] = ac;
+      // Write file for each certificate
+      for (const cert of certs) {
+        const thumbprint = await cert.getThumbprint();
+        const certFile = path.join(__dirname, `${Buffer.from(new Uint8Array(thumbprint)).toString('hex')}.cer`);
+        await fs.writeFile(certFile, Buffer.from(new Uint8Array(cert.rawData)));
+        ac.push(certFile);
+      }
+    }
+    if (options.fileDigestAlgorithm) {
+      args['fd'] = options.fileDigestAlgorithm;
+    }
+
+    let argsString = '';
+    for (const key in args) {
+      if (Array.isArray(args[key])) {
+        for (const value of args[key]) {
+          argsString += ` /${key} "${value}"`;
+        }
+        continue;
+      }
+
+      argsString += ` /${key} "${args[key]}"`;
+    }
+
+    const command = `"${signtool}" sign /v /a /sha1 ${options.certificate} ${argsString} "${options.file}"`;
+    console.log(command);
     const { stdout, stderr } = await execAsync(command);
     console.log(stdout);
     console.log(stderr);
