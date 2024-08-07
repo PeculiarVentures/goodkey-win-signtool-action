@@ -4,12 +4,14 @@ name: Testing action
 jobs:
   run_action:
     runs-on: windows-latest
+    env:
+      GOODKEY_ENV: "canary"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Create test file
         run: |
-          copy C:\Windows\System32\wmi.dll . 
+          copy C:\Windows\System32\wmi.dll .
       - name: Run the action
         uses: ./
         with:
@@ -59,4 +61,4 @@ jobs:
             f/y4bFQXfM9/WPYAoUQ33MzXJLzcgW868RPIdHMAaVwnoydk4xJ/OizW/o+v6GM4
             WhYrT4bEyP5IwLn08Nt9VUjLNrHaYYb5c+A+gmcw
             -----END CERTIFICATE-----
-          
+
