@@ -138,7 +138,7 @@ export async function sign(options: SignOptions) {
       argsString += ` /${key} "${args[key]}"`;
     }
 
-    const command = `"${signtool}" sign /v /a /sha1 ${options.certificate} ${argsString} "${options.file}"`;
+    const command = `"${signtool}" sign /v /sha1 ${options.certificate} ${argsString} "${options.file}"`;
     console.log(command);
     const { stdout, stderr } = await execAsync(command);
     console.log(stdout);
