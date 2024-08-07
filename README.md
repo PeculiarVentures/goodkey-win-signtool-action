@@ -12,18 +12,19 @@ cryptographic provider.
 
 ## Inputs
 
-| Name                      | Description                                                                | Required | Default  |
-| ------------------------- | -------------------------------------------------------------------------- | -------- | -------- |
-| `organization`            | The organization identifier.                                               | Yes      |          |
-| `token`                   | The GoodKey API token.                                                     | Yes      |          |
-| `certificate`             | SHA-1 thumbprint of the certificate to use for signing.                    | Yes      |          |
-| `file`                    | The file to sign.                                                          | Yes      |          |
-| `timestamp_url`           | The URL of the timestamp server.                                           | No       | ""       |
-| `timestamp_rfc3161_url`   | The URL of the RFC 3161 timestamp server.                                  | No       | ""       |
-| `description`             | Specifies a description of the signed content.                             | No       | ""       |
-| `description_url`         | Specifies a URL for the expanded description of the signed content.        | No       | ""       |
-| `additional_certificates` | List of additional certificates to include in the signature in PEM format. | No       | ""       |
-| `file_digest_algorithm`   | Specifies the file digest algorithm to use for creating file signatures.   | No       | "sha256" |
+| Name                         | Description                                                                | Required | Default  |
+| ---------------------------- | -------------------------------------------------------------------------- | -------- | -------- |
+| `organization`               | The organization identifier.                                               | Yes      |          |
+| `token`                      | The GoodKey API token.                                                     | Yes      |          |
+| `certificate`                | SHA-1 thumbprint of the certificate to use for signing.                    | Yes      |          |
+| `file`                       | The file to sign.                                                          | Yes      |          |
+| `timestamp_url`              | The URL of the timestamp server.                                           | No       | ""       |
+| `timestamp_rfc3161_url`      | The URL of the RFC 3161 timestamp server.                                  | No       | ""       |
+| `timestamp_digest_algorithm` | Specifies the timestamp digest algorithm to use for creating timestamps.   | No       | ""       |
+| `description`                | Specifies a description of the signed content.                             | No       | ""       |
+| `description_url`            | Specifies a URL for the expanded description of the signed content.        | No       | ""       |
+| `additional_certificates`    | List of additional certificates to include in the signature in PEM format. | No       | ""       |
+| `file_digest_algorithm`      | Specifies the file digest algorithm to use for creating file signatures.   | No       | "sha256" |
 
 ## Usage
 
@@ -49,6 +50,7 @@ jobs:
           certificate: "224b501264c1454d4627268297670451aed3b0d9"
           file: "wmi.dll"
           timestamp_rfc3161_url: "http://timestamp.digicert.com"
+          timestamp_digest_algorithm: "sha256"
           description: "This is a test file"
           description_url: "https://example.com"
           file_digest_algorithm: "sha256"
