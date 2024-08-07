@@ -62,4 +62,8 @@ jobs:
             f/y4bFQXfM9/WPYAoUQ33MzXJLzcgW868RPIdHMAaVwnoydk4xJ/OizW/o+v6GM4
             WhYrT4bEyP5IwLn08Nt9VUjLNrHaYYb5c+A+gmcw
             -----END CERTIFICATE-----
-
+      - name: Upload signed
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed
+          path: wmi.dll
