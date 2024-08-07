@@ -82,6 +82,7 @@ export interface SignOptions {
   certificate: string;
   timestampUrl?: string;
   timestampRfc3161Url?: string;
+  timestampDigestAlgorithm?: string;
   description?: string;
   descriptionUrl?: string;
   additionalCertificates?: string;
@@ -98,6 +99,9 @@ export async function sign(options: SignOptions) {
     }
     if (options.timestampRfc3161Url) {
       args['tr'] = options.timestampRfc3161Url;
+    }
+    if (options.timestampDigestAlgorithm) {
+      args['td'] = options.timestampDigestAlgorithm;
     }
     if (options.description) {
       args['d'] = options.description;

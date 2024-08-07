@@ -24,6 +24,10 @@ inputs:
     description: "The URL of the RFC 3161 time stamp server."
     required: false
     default: ""
+  timestamp_digest_algorithm:
+    description: "Specifies the digest algorithm to use for creating time stamps."
+    required: false
+    default: ""
   description:
     description: "Specifies a description of the signed content."
     required: false

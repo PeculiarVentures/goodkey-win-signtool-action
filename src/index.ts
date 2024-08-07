@@ -21,6 +21,8 @@ async function run() {
       file,
       certificate,
       timestampUrl: core.getInput('timestamp_url') || undefined,
+      timestampRfc3161Url: core.getInput('timestamp_rfc3161_url') || undefined,
+      timestampDigestAlgorithm: core.getInput('timestamp_digest_algorithm') || undefined,
       description: core.getInput('description') || undefined,
       descriptionUrl: core.getInput('description_url') || undefined,
       additionalCertificates: core.getInput('additional_certificate') || undefined,
