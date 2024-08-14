@@ -96,11 +96,7 @@ function globFilePathString(filePath: string): string[] {
   return filePath.split(split)
     .map(pathString => pathString.trimStart())
     .map(pathString => pathString.split(path.sep).join("/"))
-    .map(pattern => {
-      console.log(globSync(pattern, { mark: true }));
-
-      return globSync(pattern, { mark: true });
-    })
+    .map(pattern => globSync(pattern, { mark: true }))
     .filter((globResult) => globResult.length)
     .reduce((accumulated, current) => accumulated.concat(current), [])
 }
@@ -175,12 +171,12 @@ export async function sign(options: SignOptions) {
     throw Error(`Files by specified pattern "${options.file}" did not match any files`);
   }
 
-  filePaths.forEach(async (filePath) => {
-    await sign({
+  for(const filePath of filePaths) {
+    await signFile({
       ...options,
       file: filePath,
     });
-  });
+  }
 
 }
 
