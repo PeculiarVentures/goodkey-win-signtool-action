@@ -1,8 +1,9 @@
-import { promises as fs } from 'fs';
+import { promises as fs, statSync } from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { X509Certificates } from "@peculiar/x509";
+import { X509Certificates } from '@peculiar/x509';
+import { globSync } from 'glob';
 
 export const SYSTEM_ROOT = process.env['SystemRoot'] || 'C:\\Windows';
 
@@ -89,7 +90,17 @@ export interface SignOptions {
   fileDigestAlgorithm?: string;
 }
 
-export async function sign(options: SignOptions) {
+function globFilepathString(artifact: string): string[] {
+  const split = /[,\n]/
+  return artifact.split(split)
+    .map(pathString => pathString.trimStart())
+    .map(pathString => pathString.split(path.sep).join("/"))
+    .map(pattern => globSync(pattern))
+    .filter((globResult) => statSync(globResult[1]).isDirectory())
+    .reduce((accumulated, current) => accumulated.concat(current))
+}
+
+export async function signFile(options: SignOptions) {
   try {
     const signtool = await getSignToolPath();
     // signtool.exe sign /v /fd sha256 /a "file" /sha1 "hex(sha1(cert))"
@@ -150,6 +161,22 @@ export async function sign(options: SignOptions) {
     }
     throw error;
   }
+}
+
+export async function sign(options: SignOptions) {
+  const filePaths = globFilepathString(options.file);
+
+  if (filePaths.length === 0) {
+    throw Error(`Files by specified pattern "${options.file}" did not match any files`);
+  }
+
+  filePaths.forEach(async (filePath) => {
+    await sign({
+      ...options,
+      file: filePath,
+    });
+  });
+
 }
 
 export async function getSignToolPath(): Promise<string> {
