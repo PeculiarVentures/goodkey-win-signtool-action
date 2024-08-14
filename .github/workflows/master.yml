@@ -18,7 +18,7 @@ jobs:
           organization: ${{ secrets.ORGANIZATION }}
           token: ${{ secrets.TOKEN }}
           certificate: "224b501264c1454d4627268297670451aed3b0d9"
-          file: "wmi.dll"
+          file: "*.dll"
           timestamp_rfc3161_url: "http://timestamp.digicert.com"
           timestamp_digest_algorithm: "sha256"
           description: "This is a test file"
