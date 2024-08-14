@@ -1,6 +1,6 @@
 {
   "name": "goodkey-win-signtool-action",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Automate code signing with Windows signtool using GoodKey as the cryptographic provider.",
   "main": "index.js",
   "scripts": {
