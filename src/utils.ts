@@ -90,14 +90,19 @@ export interface SignOptions {
   fileDigestAlgorithm?: string;
 }
 
-function globFilepathString(artifact: string): string[] {
-  const split = /[,\n]/
-  return artifact.split(split)
+function globFilePathString(filePath: string): string[] {
+  const split = /[,\n]/;
+
+  return filePath.split(split)
     .map(pathString => pathString.trimStart())
     .map(pathString => pathString.split(path.sep).join("/"))
-    .map(pattern => globSync(pattern))
-    .filter((globResult) => statSync(globResult[1]).isDirectory())
-    .reduce((accumulated, current) => accumulated.concat(current))
+    .map(pattern => {
+      console.log(globSync(pattern, { mark: true }));
+
+      return globSync(pattern, { mark: true });
+    })
+    .filter((globResult) => globResult.length)
+    .reduce((accumulated, current) => accumulated.concat(current), [])
 }
 
 export async function signFile(options: SignOptions) {
@@ -164,7 +169,7 @@ export async function signFile(options: SignOptions) {
 }
 
 export async function sign(options: SignOptions) {
-  const filePaths = globFilepathString(options.file);
+  const filePaths = globFilePathString(options.file);
 
   if (filePaths.length === 0) {
     throw Error(`Files by specified pattern "${options.file}" did not match any files`);
