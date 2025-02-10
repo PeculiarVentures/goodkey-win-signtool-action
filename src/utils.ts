@@ -59,7 +59,8 @@ export async function installGoodKey(distDir: string, systemDir: string) {
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      throw new Error(`Installation of GoodKey failed: ${message}`);
+      const stack = 'stderr' in error && error.stderr ? error.stderr.toString() : error.stack;
+      throw new Error(`Installation of GoodKey failed: ${message}, ${stack}`);
     }
     throw error;
   }
