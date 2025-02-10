@@ -1,7 +1,6 @@
 import { promises as fs, statSync } from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
-import { promisify } from 'util';
 import { X509Certificates } from '@peculiar/x509';
 import { globSync } from 'glob';
 
@@ -13,7 +12,20 @@ const certProvFile = 'gkcertsvc.dll';
 const utilFile = 'gkutils.exe';
 const allFiles = [serviceFile, keyProvFile, certProvFile, utilFile];
 
-const execAsync = promisify(exec);
+const execAsync = (command: string) => {
+  return new Promise<{ stdout: string, stderr: string }>((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        const execError = new Error(`Command failed: ${command}\n${stderr}`);
+        (execError as any).stdout = stdout;
+        (execError as any).stderr = stderr;
+        reject(execError);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+};
 
 export async function installGoodKey(distDir: string, systemDir: string) {
   try {
