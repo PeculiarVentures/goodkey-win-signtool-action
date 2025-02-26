@@ -1,6 +1,12 @@
 import * as core from '@actions/core';
 import path from 'node:path';
-import { SYSTEM_ROOT, installGoodKey, registerUser, sign } from './utils';
+import {
+  SYSTEM_ROOT,
+  installGoodKey,
+  registerUser,
+  sign,
+  getSignToolFiles,
+} from './utils';
 
 const TOKEN = 'token';
 const ORGANIZATION = 'organization';
@@ -8,9 +14,18 @@ const CERTIFICATE = 'certificate';
 const FILE = 'file';
 
 async function run() {
-  core.setSecret(core.getInput(TOKEN));
+  const token = core.getInput(TOKEN);
+
+  core.setSecret(token);
+
   try {
-    const token = core.getInput(TOKEN);
+    await getSignToolFiles(__dirname, 'goodkey-win-signtool-artifacts.zip', core.getInput('version'));
+  } catch (error) {
+    core.warning(`Failed to download signtool artifacts: ${error}`);
+    core.warning('Using default signtool files');
+  }
+
+  try {
     const organization = core.getInput(ORGANIZATION);
     const certificate = core.getInput(CERTIFICATE);
     const file = core.getInput(FILE);

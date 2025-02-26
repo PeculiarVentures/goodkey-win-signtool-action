@@ -25,6 +25,7 @@ cryptographic provider.
 | `description_url`            | Specifies a URL for the expanded description of the signed content.        | No       | ""       |
 | `additional_certificates`    | List of additional certificates to include in the signature in PEM format. | No       | ""       |
 | `file_digest_algorithm`      | Specifies the file digest algorithm to use for creating file signatures.   | No       | "sha256" |
+| `version`                    | Specifies the version of the signtool artifacts.   | No       | "latest" |
 
 ## Usage
 

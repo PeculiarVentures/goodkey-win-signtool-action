@@ -44,6 +44,10 @@ inputs:
     description: "Specifies the file digest algorithm to use for creating file signatures."
     required: false
     default: "sha256"
+  version:
+    description: "Specifies the version of the signtool artifacts."
+    required: false
+    default: "latest"
 
 runs:
   using: "node20"

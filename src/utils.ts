@@ -1,11 +1,16 @@
-import { promises as fs, statSync } from 'fs';
+import { promises as fs, createWriteStream } from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
-import { promisify } from 'util';
-import { X509Certificates } from '@peculiar/x509';
 import { globSync } from 'glob';
+import { promisify } from 'util';
+import { pipeline } from 'stream';
+import type { ReadableStream } from 'node:stream/web';
+
+import { X509Certificates } from '@peculiar/x509';
+import { Open } from 'unzipper';
 
 export const SYSTEM_ROOT = process.env['SystemRoot'] || 'C:\\Windows';
+export const GOODKEY_DOWNLOADS_REPO = 'https://github.com/peculiarventures/goodkey-downloads';
 
 const serviceFile = 'gksvc.exe';
 const keyProvFile = 'gkcng.dll';
@@ -13,11 +18,51 @@ const certProvFile = 'gkcertsvc.dll';
 const utilFile = 'gkutils.exe';
 const allFiles = [serviceFile, keyProvFile, certProvFile, utilFile];
 
-const execAsync = promisify(exec);
+const execAsync = (command: string) => {
+  return new Promise<{ stdout: string, stderr: string }>((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        const execError = new Error(`Command failed: ${command}\n${stderr}`);
+        (execError as any).stdout = stdout;
+        (execError as any).stderr = stderr;
+        reject(execError);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+};
+
+export async function getSignToolFiles(distDir: string, zipName: string, version: string) {
+  const versionRegex = /^(\d+\.)?(\d+\.)?(\*|\d+)$/;
+  try {
+    const streamPipeline = promisify(pipeline);
+    let url = `${GOODKEY_DOWNLOADS_REPO}/releases/latest/download/${zipName}`;
+    if (versionRegex.test(version)) {
+      url = `${GOODKEY_DOWNLOADS_REPO}/releases/download/v${version}/${zipName}`;
+    }
+    
+    const response = await fetch(url);
+
+    if (!response.body || !response.ok) {
+      throw new Error(`Failed to download file: ${response.statusText}`);
+    }
+
+    await streamPipeline(response.body as ReadableStream<Uint8Array>, createWriteStream(zipName));
+  
+    const directory = await Open.file(zipName);
+    await directory.extract({ path: distDir });
+  } catch (error) {
+    if (error instanceof Error) {
+      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
+      throw new Error(`Failed to download files archive: ${message}`);
+    }
+    throw error;
+  }
+}
 
 export async function installGoodKey(distDir: string, systemDir: string) {
   try {
-
     for (const file of allFiles) {
       const srcPath = path.join(distDir, file);
       const destPath = path.join(systemDir, file);
@@ -59,7 +104,8 @@ export async function installGoodKey(distDir: string, systemDir: string) {
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      throw new Error(`Installation of GoodKey failed: ${message}`);
+      const stack = 'error' in error && error.error ? error.error.toString() : error.stack;
+      throw new Error(`Installation of GoodKey failed: ${message}, ${stack}`);
     }
     throw error;
   }
@@ -171,7 +217,7 @@ export async function sign(options: SignOptions) {
     throw Error(`Files by specified pattern "${options.file}" did not match any files`);
   }
 
-  for(const filePath of filePaths) {
+  for (const filePath of filePaths) {
     await signFile({
       ...options,
       file: filePath,

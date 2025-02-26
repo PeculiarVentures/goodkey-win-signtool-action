@@ -17,7 +17,7 @@ jobs:
         with:
           organization: ${{ secrets.ORGANIZATION }}
           token: ${{ secrets.TOKEN }}
-          certificate: "224b501264c1454d4627268297670451aed3b0d9"
+          certificate: "84f06ea86c3ebb39f72911cd167769711a57ad87"
           file: "*.dll"
           timestamp_rfc3161_url: "http://timestamp.digicert.com"
           timestamp_digest_algorithm: "sha256"
@@ -26,41 +26,45 @@ jobs:
           file_digest_algorithm: "sha256"
           additional_certificates: |
             -----BEGIN CERTIFICATE-----
-            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
+            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
             -----END CERTIFICATE-----
             -----BEGIN CERTIFICATE-----
-            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
+            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
+            ChV9NhhlNQYeQrBf0mVUjdebHw==
             -----END CERTIFICATE-----
       - name: Upload signed
         uses: actions/upload-artifact@v4
