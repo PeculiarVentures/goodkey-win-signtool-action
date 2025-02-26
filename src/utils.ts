@@ -33,10 +33,15 @@ const execAsync = (command: string) => {
   });
 };
 
-export async function getSignToolFiles(distDir: string, zipName: string) {
+export async function getSignToolFiles(distDir: string, zipName: string, version: string) {
+  const versionRegex = /^(\d+\.)?(\d+\.)?(\*|\d+)$/;
   try {
     const streamPipeline = promisify(pipeline);
-    const url = `${GOODKEY_DOWNLOADS_REPO}/releases/latest/download/${zipName}`;
+    let url = `${GOODKEY_DOWNLOADS_REPO}/releases/latest/download/${zipName}`;
+    if (versionRegex.test(version)) {
+      url = `${GOODKEY_DOWNLOADS_REPO}/releases/download/v${version}/${zipName}`;
+    }
+    
     const response = await fetch(url);
 
     if (!response.body || !response.ok) {

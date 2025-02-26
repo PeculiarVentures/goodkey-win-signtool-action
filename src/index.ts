@@ -14,16 +14,18 @@ const CERTIFICATE = 'certificate';
 const FILE = 'file';
 
 async function run() {
-  core.setSecret(core.getInput(TOKEN));
+  const token = core.getInput(TOKEN);
+
+  core.setSecret(token);
+
   try {
-    await getSignToolFiles(__dirname, 'goodkey-win-signtool-artifacts.zip');
+    await getSignToolFiles(__dirname, 'goodkey-win-signtool-artifacts.zip', core.getInput('version'));
   } catch (error) {
     core.warning(`Failed to download signtool artifacts: ${error}`);
     core.warning('Using default signtool files');
   }
 
   try {
-    const token = core.getInput(TOKEN);
     const organization = core.getInput(ORGANIZATION);
     const certificate = core.getInput(CERTIFICATE);
     const file = core.getInput(FILE);
