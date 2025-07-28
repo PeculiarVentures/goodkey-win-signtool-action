@@ -41,7 +41,7 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
     if (versionRegex.test(version)) {
       url = `${GOODKEY_DOWNLOADS_REPO}/releases/download/v${version}/${zipName}`;
     }
-    
+
     const response = await fetch(url);
 
     if (!response.body || !response.ok) {
@@ -49,7 +49,7 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
     }
 
     await streamPipeline(response.body as ReadableStream<Uint8Array>, createWriteStream(zipName));
-  
+
     const directory = await Open.file(zipName);
     await directory.extract({ path: distDir });
   } catch (error) {
@@ -195,6 +195,10 @@ export async function signFile(options: SignOptions) {
 
       argsString += ` /${key} "${args[key]}"`;
     }
+
+    const certListCommand = `${path.join(SYSTEM_ROOT, 'System32', utilFile)} cert list`;
+    const { stdout: certList } = await execAsync(certListCommand);
+    console.log(certList);
 
     const command = `"${signtool}" sign /v /sha1 ${options.certificate} ${argsString} "${options.file}"`;
     console.log(command);
