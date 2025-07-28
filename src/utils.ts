@@ -213,7 +213,7 @@ export async function signFile(options: SignOptions) {
     const { stdout: certList } = await execAsync(certListCommand);
     console.log(certList);
 
-    const command = `"${signtool}" sign /v /sha1 ${options.certificate} ${argsString} "${options.file}"`;
+    const command = `"${signtool}" sign /debug /v /sha1 ${options.certificate} ${argsString} "${options.file}"`;
     console.log('Executing command:', command);
     const { stdout, stderr } = await execAsync(command, { verbose: true });
     console.log('STDOUT:', stdout);
