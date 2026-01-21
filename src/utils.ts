@@ -1,3 +1,4 @@
+import * as core from '@actions/core';
 import { promises as fs, createWriteStream } from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
@@ -42,16 +43,26 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
       url = `${GOODKEY_DOWNLOADS_REPO}/releases/download/v${version}/${zipName}`;
     }
     
+    core.info(`📥 Downloading from: ${url}`);
     const response = await fetch(url);
 
     if (!response.body || !response.ok) {
       throw new Error(`Failed to download file: ${response.statusText}`);
     }
 
+    const contentLength = response.headers.get('content-length');
+    if (contentLength) {
+      core.info(`   File size: ${(parseInt(contentLength) / 1024).toFixed(2)} KB`);
+    }
+
+    core.info(`   Saving to: ${zipName}`);
     await streamPipeline(response.body as ReadableStream<Uint8Array>, createWriteStream(zipName));
+    core.info(`   ✅ Download complete`);
   
+    core.info(`📂 Extracting archive to: ${distDir}`);
     const directory = await Open.file(zipName);
     await directory.extract({ path: distDir });
+    core.info(`   ✅ Extraction complete`);
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
@@ -63,21 +74,32 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
 
 export async function installGoodKey(distDir: string, systemDir: string) {
   try {
+    core.info(`📁 Copying GoodKey files to system directory...`);
     for (const file of allFiles) {
       const srcPath = path.join(distDir, file);
       const destPath = path.join(systemDir, file);
+      core.debug(`   Copying: ${file}`);
       await fs.copyFile(srcPath, destPath);
     }
+    core.info(`   ✅ All files copied`);
 
     // Register DLLs
+    core.info(`🔧 Registering DLLs...`);
+    core.debug(`   Registering: ${keyProvFile}`);
     await execAsync(`regsvr32.exe /s "${path.join(systemDir, keyProvFile)}"`);
+    core.debug(`   Registering: ${certProvFile}`);
     await execAsync(`regsvr32.exe /s "${path.join(systemDir, certProvFile)}"`);
+    core.info(`   ✅ DLLs registered`);
 
     // Install service
+    core.info(`🚀 Installing GoodKey service...`);
+    core.debug(`   Creating service: gksvc`);
     await execAsync(`sc create gksvc binPath= "${path.join(systemDir, serviceFile)}" start= auto`);
+    core.debug(`   Starting service...`);
     await execAsync(`sc start gksvc`);
 
     // Wait for the service to start
+    core.info(`⏳ Waiting for service to start...`);
     let isRunning = false;
     let attempts = 0;
     const maxAttempts = 10; // Maximum number of attempts
@@ -87,6 +109,7 @@ export async function installGoodKey(distDir: string, systemDir: string) {
       const { stdout } = await execAsync(`sc query gksvc`);
       isRunning = stdout.includes('RUNNING');
       if (!isRunning) {
+        core.debug(`   Attempt ${attempts + 1}/${maxAttempts}: Service not yet running...`);
         // Wait for a second before checking again
         await new Promise(resolve => setTimeout(resolve, interval));
       }
@@ -97,10 +120,7 @@ export async function installGoodKey(distDir: string, systemDir: string) {
       throw new Error('Service did not start within the expected time.');
     }
 
-    // Get User status using `gkutils auth status` and log it
-    // const { stdout } = await execAsync(`${path.join(systemDir, utilFile)} auth status`);
-    // console.log(stdout);
-    // Error: Installation of GoodKey failed: rpc error: code = Unknown desc = Client for GoodKey Server is not initialized. Run 'gkutils auth register' to authenticate.
+    core.info(`   ✅ Service is running`);
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
@@ -113,8 +133,15 @@ export async function installGoodKey(distDir: string, systemDir: string) {
 
 export async function registerUser(token: string, organizationId: string) {
   try {
-    const { stdout } = await execAsync(`${path.join(SYSTEM_ROOT, 'System32', utilFile)} auth register -t ${token} -o ${organizationId}`);
-    console.log(stdout);
+    core.info(`🔑 Authenticating with GoodKey service...`);
+    const utilPath = path.join(SYSTEM_ROOT, 'System32', utilFile);
+    core.debug(`   Using utility: ${utilPath}`);
+    core.debug(`   Organization: ${organizationId}`);
+    const { stdout } = await execAsync(`${utilPath} auth register -t ${token} -o ${organizationId}`);
+    if (stdout.trim()) {
+      core.debug(`   ${stdout.trim()}`);
+    }
+    core.info(`   ✅ Authentication successful`);
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
@@ -149,25 +176,36 @@ function globFilePathString(filePath: string): string[] {
 
 export async function signFile(options: SignOptions) {
   try {
+    core.debug(`🔍 Locating signtool.exe...`);
     const signtool = await getSignToolPath();
+    core.debug(`   Found: ${signtool}`);
+
     // signtool.exe sign /v /fd sha256 /a "file" /sha1 "hex(sha1(cert))"
     const args: Record<string, string | string[]> = {};
+    
+    core.debug(`⚙️ Configuring signing options...`);
     if (options.timestampUrl) {
       args['t'] = options.timestampUrl;
+      core.debug(`   Timestamp URL: ${options.timestampUrl}`);
     }
     if (options.timestampRfc3161Url) {
       args['tr'] = options.timestampRfc3161Url;
+      core.debug(`   Timestamp RFC3161 URL: ${options.timestampRfc3161Url}`);
     }
     if (options.timestampDigestAlgorithm) {
       args['td'] = options.timestampDigestAlgorithm;
+      core.debug(`   Timestamp digest algorithm: ${options.timestampDigestAlgorithm}`);
     }
     if (options.description) {
       args['d'] = options.description;
+      core.debug(`   Description: ${options.description}`);
     }
     if (options.descriptionUrl) {
       args['du'] = options.descriptionUrl;
+      core.debug(`   Description URL: ${options.descriptionUrl}`);
     }
     if (options.additionalCertificates) {
+      core.debug(`   Processing additional certificates...`);
       const certs = new X509Certificates(options.additionalCertificates);
 
       const ac: string[] = [];
@@ -176,12 +214,14 @@ export async function signFile(options: SignOptions) {
         const thumbprint = await cert.getThumbprint();
         const certFile = path.join(__dirname, `${Buffer.from(new Uint8Array(thumbprint)).toString('hex')}.cer`);
         await fs.writeFile(certFile, Buffer.from(new Uint8Array(cert.rawData)));
+        core.debug(`   Added certificate: ${certFile}`);
         ac.push(certFile);
       }
       args['ac'] = ac;
     }
     if (options.fileDigestAlgorithm) {
       args['fd'] = options.fileDigestAlgorithm;
+      core.debug(`   File digest algorithm: ${options.fileDigestAlgorithm}`);
     }
 
     let argsString = '';
@@ -197,10 +237,16 @@ export async function signFile(options: SignOptions) {
     }
 
     const command = `"${signtool}" sign /v /sha1 ${options.certificate} ${argsString} "${options.file}"`;
-    console.log(command);
+    core.debug(`🖊️ Executing signtool command...`);
+    core.debug(`   Command: ${command}`);
     const { stdout, stderr } = await execAsync(command);
-    console.log(stdout);
-    console.log(stderr);
+    if (stdout.trim()) {
+      core.debug(`   stdout: ${stdout.trim()}`);
+    }
+    if (stderr.trim()) {
+      core.debug(`   stderr: ${stderr.trim()}`);
+    }
+    core.info(`   ✅ File signed successfully: ${options.file}`);
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
@@ -211,25 +257,35 @@ export async function signFile(options: SignOptions) {
 }
 
 export async function sign(options: SignOptions) {
+  core.info(`🔎 Searching for files matching pattern: ${options.file}`);
   const filePaths = globFilePathString(options.file);
 
   if (filePaths.length === 0) {
     throw Error(`Files by specified pattern "${options.file}" did not match any files`);
   }
 
-  for (const filePath of filePaths) {
+  core.info(`📝 Found ${filePaths.length} file(s) to sign:`);
+  filePaths.forEach((fp, index) => {
+    core.info(`   ${index + 1}. ${fp}`);
+  });
+
+  for (let i = 0; i < filePaths.length; i++) {
+    const filePath = filePaths[i];
+    core.info(`📄 Signing file ${i + 1}/${filePaths.length}: ${filePath}`);
     await signFile({
       ...options,
       file: filePath,
     });
   }
 
+  core.info(`✅ Successfully signed ${filePaths.length} file(s)`);
 }
 
 export async function getSignToolPath(): Promise<string> {
   const rootDir = 'C:\\Program Files (x86)\\Windows Kits';
   const signtoolName = 'signtool.exe';
 
+  core.debug(`   Searching in: ${rootDir}`);
   const directories = [rootDir];
 
   while (directories.length > 0) {
@@ -244,6 +300,7 @@ export async function getSignToolPath(): Promise<string> {
 
       const stat = await fs.stat(absolutePath);
       if (file === signtoolName && stat.isFile()) {
+        core.debug(`   ✅ Found signtool at: ${absolutePath}`);
         return absolutePath;
       } else if (stat.isDirectory()) {
         directories.push(absolutePath);
