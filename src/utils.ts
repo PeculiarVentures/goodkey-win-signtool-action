@@ -70,9 +70,26 @@ export async function installGoodKey(distDir: string, systemDir: string) {
     }
 
     // Register DLLs
-    const regsvr32Path = path.join(SYSTEM_ROOT, 'System32', 'regsvr32.exe');
-    await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, keyProvFile)}"`);
-    await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, certProvFile)}"`);
+    // DEBUG: detect process/runner architecture and prefer Sysnative when running 32-bit Node on 64-bit Windows
+    console.log('DEBUG: process.arch=', process.arch, 'PROCESSOR_ARCHITECTURE=', process.env.PROCESSOR_ARCHITECTURE, 'PROCESSOR_ARCHITEW6432=', process.env.PROCESSOR_ARCHITEW6432);
+
+    let regsvr32Path = path.join(SYSTEM_ROOT, 'System32', 'regsvr32.exe');
+    if (process.arch === 'ia32' && process.env.PROCESSOR_ARCHITEW6432) {
+      // 32-bit Node on 64-bit Windows — try Sysnative to reach 64-bit regsvr32
+      const sysnative = path.join(SYSTEM_ROOT, 'Sysnative', 'regsvr32.exe');
+      try {
+        await fs.access(sysnative);
+        regsvr32Path = sysnative;
+        console.log('DEBUG: using Sysnative regsvr32 =', regsvr32Path);
+      } catch (err) {
+        console.log('DEBUG: Sysnative not available, will use System32 (may be redirected to SysWOW64)');
+      }
+    }
+
+    console.log(`Registering DLLs using: ${regsvr32Path}`);
+    // Temporarily disable /s (silent) so we can see regsvr32 output in CI logs
+    await execAsync(`"${regsvr32Path}" "${path.join(systemDir, keyProvFile)}"`);
+    await execAsync(`"${regsvr32Path}" "${path.join(systemDir, certProvFile)}"`);
 
     // Install service
     await execAsync(`sc create gksvc binPath= "${path.join(systemDir, serviceFile)}" start= auto`);
