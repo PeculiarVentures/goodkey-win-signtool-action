@@ -88,8 +88,8 @@ export async function installGoodKey(distDir: string, systemDir: string) {
 
     console.log(`Registering DLLs using: ${regsvr32Path}`);
     // Temporarily disable /s (silent) so we can see regsvr32 output in CI logs
-    await execAsync(`"${regsvr32Path}" "${path.join(systemDir, keyProvFile)}"`);
-    await execAsync(`"${regsvr32Path}" "${path.join(systemDir, certProvFile)}"`);
+    await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, keyProvFile)}"`);
+    await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, certProvFile)}"`);
 
     // Install service
     await execAsync(`sc create gksvc binPath= "${path.join(systemDir, serviceFile)}" start= auto`);
