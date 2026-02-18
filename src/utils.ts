@@ -19,7 +19,7 @@ const utilFile = 'gkutils.exe';
 const allFiles = [serviceFile, keyProvFile, certProvFile, utilFile];
 
 const execAsync = (command: string) => {
-  return new Promise<{ stdout: string, stderr: string }>((resolve, reject) => {
+  return new Promise<{ stdout: string, stderr: string; }>((resolve, reject) => {
     exec(command, (error, stdout, stderr) => {
       if (error) {
         const execError = new Error(`Command failed: ${command}\n${stderr}`);
@@ -41,7 +41,7 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
     if (versionRegex.test(version)) {
       url = `${GOODKEY_DOWNLOADS_REPO}/releases/download/v${version}/${zipName}`;
     }
-    
+
     const response = await fetch(url);
 
     if (!response.body || !response.ok) {
@@ -49,7 +49,7 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
     }
 
     await streamPipeline(response.body as ReadableStream<Uint8Array>, createWriteStream(zipName));
-  
+
     const directory = await Open.file(zipName);
     await directory.extract({ path: distDir });
   } catch (error) {
@@ -70,8 +70,9 @@ export async function installGoodKey(distDir: string, systemDir: string) {
     }
 
     // Register DLLs
-    await execAsync(`regsvr32.exe /s "${path.join(systemDir, keyProvFile)}"`);
-    await execAsync(`regsvr32.exe /s "${path.join(systemDir, certProvFile)}"`);
+    const regsvr32Path = path.join(SYSTEM_ROOT, 'System32', 'regsvr32.exe');
+    await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, keyProvFile)}"`);
+    await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, certProvFile)}"`);
 
     // Install service
     await execAsync(`sc create gksvc binPath= "${path.join(systemDir, serviceFile)}" start= auto`);
@@ -144,7 +145,7 @@ function globFilePathString(filePath: string): string[] {
     .map(pathString => pathString.split(path.sep).join("/"))
     .map(pattern => globSync(pattern, { mark: true }))
     .filter((globResult) => globResult.length)
-    .reduce((accumulated, current) => accumulated.concat(current), [])
+    .reduce((accumulated, current) => accumulated.concat(current), []);
 }
 
 export async function signFile(options: SignOptions) {
