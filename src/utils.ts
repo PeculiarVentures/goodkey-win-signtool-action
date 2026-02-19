@@ -22,7 +22,11 @@ const execAsync = (command: string) => {
   return new Promise<{ stdout: string, stderr: string; }>((resolve, reject) => {
     exec(command, (error, stdout, stderr) => {
       if (error) {
-        const execError = new Error(`Command failed: ${command}\n${stderr}`);
+        const code = (error as any).code;
+        const signal = (error as any).signal;
+        const execError = new Error(`Command failed${code !== undefined ? ` (code=${code})` : ``}${signal ? ` (signal=${signal})` : ``}: ${command}\n${stderr}`);
+        (execError as any).code = code;
+        (execError as any).signal = signal;
         (execError as any).stdout = stdout;
         (execError as any).stderr = stderr;
         reject(execError);

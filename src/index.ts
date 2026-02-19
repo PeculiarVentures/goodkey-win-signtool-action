@@ -46,7 +46,8 @@ async function run() {
   }
   catch (error) {
     if (error instanceof Error) {
-      core.setFailed(error.message);
+      const code = (error as any).code;
+      core.setFailed(code !== undefined ? `${error.message} (code=${code})` : error.message);
     } else {
       core.setFailed(`Unknown error: ${error}`);
     }
