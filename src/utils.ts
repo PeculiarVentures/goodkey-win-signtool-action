@@ -18,13 +18,26 @@ const certProvFile = 'gkcertsvc.dll';
 const utilFile = 'gkutils.exe';
 const allFiles = [serviceFile, keyProvFile, certProvFile, utilFile];
 
-const execAsync = (command: string) => {
+const execAsync = (command: string, options?: { verbose?: boolean }) => {
   return new Promise<{ stdout: string, stderr: string }>((resolve, reject) => {
+    if (options?.verbose) {
+      console.log(`[EXEC] Running command: ${command}`);
+    }
+
     exec(command, (error, stdout, stderr) => {
+      if (options?.verbose) {
+        console.log(`[EXEC] Command completed with exit code: ${error?.code || 0}`);
+        if (stdout) console.log(`[EXEC] STDOUT:\n${stdout}`);
+        if (stderr) console.log(`[EXEC] STDERR:\n${stderr}`);
+      }
+
       if (error) {
         const execError = new Error(`Command failed: ${command}\n${stderr}`);
         (execError as any).stdout = stdout;
         (execError as any).stderr = stderr;
+        if (options?.verbose) {
+          console.log(`[EXEC] Command failed with error:`, error);
+        }
         reject(execError);
       } else {
         resolve({ stdout, stderr });
@@ -41,7 +54,7 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
     if (versionRegex.test(version)) {
       url = `${GOODKEY_DOWNLOADS_REPO}/releases/download/v${version}/${zipName}`;
     }
-    
+
     const response = await fetch(url);
 
     if (!response.body || !response.ok) {
@@ -49,7 +62,7 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
     }
 
     await streamPipeline(response.body as ReadableStream<Uint8Array>, createWriteStream(zipName));
-  
+
     const directory = await Open.file(zipName);
     await directory.extract({ path: distDir });
   } catch (error) {
@@ -196,11 +209,15 @@ export async function signFile(options: SignOptions) {
       argsString += ` /${key} "${args[key]}"`;
     }
 
-    const command = `"${signtool}" sign /v /sha1 ${options.certificate} ${argsString} "${options.file}"`;
-    console.log(command);
-    const { stdout, stderr } = await execAsync(command);
-    console.log(stdout);
-    console.log(stderr);
+    const certListCommand = `${path.join(SYSTEM_ROOT, 'System32', utilFile)} cert list`;
+    const { stdout: certList } = await execAsync(certListCommand);
+    console.log(certList);
+
+    const command = `"${signtool}" sign /debug /v /sha1 ${options.certificate} ${argsString} "${options.file}"`;
+    console.log('Executing command:', command);
+    const { stdout, stderr } = await execAsync(command, { verbose: true });
+    console.log('STDOUT:', stdout);
+    console.log('STDERR:', stderr);
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
