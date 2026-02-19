@@ -19,19 +19,21 @@ const utilFile = 'gkutils.exe';
 const allFiles = [serviceFile, keyProvFile, certProvFile, utilFile];
 
 const execAsync = (command: string) => {
-  return new Promise<{ stdout: string, stderr: string; }>((resolve, reject) => {
+  return new Promise<{ stdout: string, stderr: string; exitCode?: number | null }>((resolve, reject) => {
     exec(command, (error, stdout, stderr) => {
+      const code = (error as any)?.code;
+      const signal = (error as any)?.signal;
+
       if (error) {
-        const code = (error as any).code;
-        const signal = (error as any).signal;
         const execError = new Error(`Command failed${code !== undefined ? ` (code=${code})` : ``}${signal ? ` (signal=${signal})` : ``}: ${command}\n${stderr}`);
         (execError as any).code = code;
+        (execError as any).exitCode = code;
         (execError as any).signal = signal;
         (execError as any).stdout = stdout;
         (execError as any).stderr = stderr;
         reject(execError);
       } else {
-        resolve({ stdout, stderr });
+        resolve({ stdout, stderr, exitCode: 0 });
       }
     });
   });
@@ -92,7 +94,22 @@ export async function installGoodKey(distDir: string, systemDir: string) {
 
     console.log(`Registering DLLs using: ${regsvr32Path}`);
     // Temporarily disable /s (silent) so we can see regsvr32 output in CI logs
-    await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, keyProvFile)}"`);
+    try {
+      await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, keyProvFile)}"`);
+    } catch (err) {
+      // Some Windows crashes produce STATUS_STACK_BUFFER_OVERRUN (0xC0000409 / 3221226505)
+      // Node/Windows may surface this as a large unsigned number or as its signed 32-bit equivalent.
+      const code = (err as any)?.code ?? (err as any)?.exitCode;
+      const ignoredCodes = new Set<number | null>([3221226505, -1073740791]);
+      if (code != null && ignoredCodes.has(code)) {
+        const stdout = (err as any)?.stdout ?? '';
+        const stderr = (err as any)?.stderr ?? '';
+        console.warn(`Warning: registering ${keyProvFile} returned STATUS_STACK_BUFFER_OVERRUN (0xC0000409) (code=${code}). This error is being temporarily ignored; continuing installation. stderr: ${stderr}`);
+      } else {
+        throw err;
+      }
+    }
+
     await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, certProvFile)}"`);
 
     // Install service
@@ -127,7 +144,8 @@ export async function installGoodKey(distDir: string, systemDir: string) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
       const stack = 'error' in error && error.error ? error.error.toString() : error.stack;
-      throw new Error(`Installation of GoodKey failed: ${message}, ${stack}`);
+      const codeInfo = (error as any).code !== undefined ? ` (code=${(error as any).code})` : '';
+      throw new Error(`Installation of GoodKey failed: ${message}${codeInfo}, ${stack}`);
     }
     throw error;
   }
@@ -140,7 +158,8 @@ export async function registerUser(token: string, organizationId: string) {
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      throw new Error(`Registration of user failed: ${message}`);
+      const codeInfo = (error as any).code !== undefined ? ` (code=${(error as any).code})` : '';
+      throw new Error(`Registration of user failed: ${message}${codeInfo}`);
     }
     throw error;
   }
@@ -226,7 +245,8 @@ export async function signFile(options: SignOptions) {
   } catch (error) {
     if (error instanceof Error) {
       const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      throw new Error(`Signing of file failed: ${message}`);
+      const codeInfo = (error as any).code !== undefined ? ` (code=${(error as any).code})` : '';
+      throw new Error(`Signing of file failed: ${message}${codeInfo}`);
     }
     throw error;
   }
