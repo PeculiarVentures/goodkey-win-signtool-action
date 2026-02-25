@@ -1,3 +1,4 @@
+import * as core from '@actions/core';
 import { promises as fs, createWriteStream } from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
@@ -18,16 +19,92 @@ const certProvFile = 'gkcertsvc.dll';
 const utilFile = 'gkutils.exe';
 const allFiles = [serviceFile, keyProvFile, certProvFile, utilFile];
 
+type CommandExecutionError = Error & {
+  code?: number | string | null;
+  exitCode?: number | null;
+  signal?: NodeJS.Signals | string | null;
+  stdout?: string;
+  stderr?: string;
+};
+
+function asCommandExecutionError(error: unknown): CommandExecutionError {
+  return error as CommandExecutionError;
+}
+
+function generateErrorMessage(prefix: string, error: CommandExecutionError): string {
+  const output = error.stdout?.toString().trim();
+  const message = output || error.message;
+  const code = error.code ?? error.exitCode;
+  const codeInfo = code !== undefined && code !== null ? ` (code=${code})` : '';
+  return `${prefix}: ${message}${codeInfo}`;
+}
+
+function buildCommandFailureMessage(command: string, error: CommandExecutionError): string {
+  const code = error.code;
+  const signal = error.signal;
+  const codeInfo = code !== undefined ? ` (code=${code})` : '';
+  const signalInfo = signal ? ` (signal=${signal})` : '';
+  const stderr = error.stderr?.toString().trim();
+  const stderrInfo = stderr ? `\n${stderr}` : '';
+  return `Command failed${codeInfo}${signalInfo}: ${command}${stderrInfo}`;
+}
+
+async function getRegsvr32Path(): Promise<string> {
+  const system32 = path.join(SYSTEM_ROOT, 'System32', 'regsvr32.exe');
+  const candidates: string[] = [system32];
+
+  if (process.arch === 'ia32' && process.env.PROCESSOR_ARCHITEW6432) {
+    candidates.unshift(path.join(SYSTEM_ROOT, 'Sysnative', 'regsvr32.exe'));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // Continue searching
+    }
+  }
+
+  try {
+    const { stdout } = await execAsync('where.exe regsvr32.exe');
+    const found = stdout.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+    if (found) {
+      return found;
+    }
+  } catch {
+    // Continue searching
+  }
+
+  try {
+    const psCommand = 'powershell -NoProfile -Command "(Get-Command regsvr32 -ErrorAction SilentlyContinue).Source"';
+    const { stdout } = await execAsync(psCommand);
+    const found = stdout.trim();
+    if (found) {
+      return found;
+    }
+  } catch {
+    // Continue searching
+  }
+
+  return 'regsvr32.exe';
+}
+
 const execAsync = (command: string) => {
-  return new Promise<{ stdout: string, stderr: string }>((resolve, reject) => {
+  return new Promise<{ stdout: string, stderr: string; exitCode?: number | null; }>((resolve, reject) => {
     exec(command, (error, stdout, stderr) => {
       if (error) {
-        const execError = new Error(`Command failed: ${command}\n${stderr}`);
-        (execError as any).stdout = stdout;
-        (execError as any).stderr = stderr;
+        const baseError = asCommandExecutionError(error);
+        const execError = new Error('') as CommandExecutionError;
+        execError.code = baseError.code;
+        execError.exitCode = typeof baseError.code === 'number' ? baseError.code : null;
+        execError.signal = baseError.signal;
+        execError.stdout = stdout;
+        execError.stderr = stderr;
+        execError.message = buildCommandFailureMessage(command, execError);
         reject(execError);
       } else {
-        resolve({ stdout, stderr });
+        resolve({ stdout, stderr, exitCode: 0 });
       }
     });
   });
@@ -41,21 +118,29 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
     if (versionRegex.test(version)) {
       url = `${GOODKEY_DOWNLOADS_REPO}/releases/download/v${version}/${zipName}`;
     }
-    
+
+    core.info(`📥 Downloading from: ${url}`);
     const response = await fetch(url);
 
     if (!response.body || !response.ok) {
       throw new Error(`Failed to download file: ${response.statusText}`);
     }
 
+    const contentLength = response.headers.get('content-length');
+    if (contentLength) {
+      core.info(`   File size: ${(parseInt(contentLength) / 1024).toFixed(2)} KB`);
+    }
+
+    core.info(`   Saving to: ${zipName}`);
     await streamPipeline(response.body as ReadableStream<Uint8Array>, createWriteStream(zipName));
-  
+    core.info(`   ✅ Download complete`);
+    core.info(`📂 Extracting archive to: ${distDir}`);
     const directory = await Open.file(zipName);
     await directory.extract({ path: distDir });
+    core.info(`   ✅ Extraction complete`);
   } catch (error) {
     if (error instanceof Error) {
-      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      throw new Error(`Failed to download files archive: ${message}`);
+      throw new Error(generateErrorMessage('Failed to download files archive', asCommandExecutionError(error)));
     }
     throw error;
   }
@@ -63,21 +148,49 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
 
 export async function installGoodKey(distDir: string, systemDir: string) {
   try {
+    core.info(`📁 Copying GoodKey files to system directory...`);
     for (const file of allFiles) {
       const srcPath = path.join(distDir, file);
       const destPath = path.join(systemDir, file);
+      core.debug(`   Copying: ${file}`);
       await fs.copyFile(srcPath, destPath);
     }
+    core.info(`   ✅ All files copied`);
 
-    // Register DLLs
-    await execAsync(`regsvr32.exe /s "${path.join(systemDir, keyProvFile)}"`);
-    await execAsync(`regsvr32.exe /s "${path.join(systemDir, certProvFile)}"`);
+    core.info(`🔧 Registering DLLs...`);
+    core.debug(`   Registering: ${keyProvFile}`);
+    const regsvr32Path = await getRegsvr32Path();
+
+    try {
+      await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, keyProvFile)}"`);
+    } catch (error) {
+      const commandError = asCommandExecutionError(error);
+      // Some Windows crashes produce STATUS_STACK_BUFFER_OVERRUN (0xC0000409 / 3221226505)
+      // Node/Windows may surface this as a large unsigned number or as its signed 32-bit equivalent.
+      const code = commandError.code ?? commandError.exitCode;
+      const ignoredCodes = new Set<number | null>([3221226505, -1073740791]);
+      if (typeof code === 'number' && ignoredCodes.has(code)) {
+        const stderr = commandError.stderr?.toString().trim();
+        const stderrInfo = stderr ? `; stderr: ${stderr}` : '';
+        core.warning(`Registering ${keyProvFile} returned STATUS_STACK_BUFFER_OVERRUN (0xC0000409) (code=${code}) — temporarily ignored${stderrInfo}`);
+      } else {
+        throw error;
+      }
+    }
+
+    core.debug(`   Registering: ${certProvFile}`);
+    await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, certProvFile)}"`);
+    core.info(`   ✅ DLLs registered`);
 
     // Install service
+    core.info(`🚀 Installing GoodKey service...`);
+    core.debug(`   Creating service: gksvc`);
     await execAsync(`sc create gksvc binPath= "${path.join(systemDir, serviceFile)}" start= auto`);
+    core.debug(`   Starting service...`);
     await execAsync(`sc start gksvc`);
 
     // Wait for the service to start
+    core.info(`⏳ Waiting for service to start...`);
     let isRunning = false;
     let attempts = 0;
     const maxAttempts = 10; // Maximum number of attempts
@@ -87,6 +200,7 @@ export async function installGoodKey(distDir: string, systemDir: string) {
       const { stdout } = await execAsync(`sc query gksvc`);
       isRunning = stdout.includes('RUNNING');
       if (!isRunning) {
+        core.debug(`   Attempt ${attempts + 1}/${maxAttempts}: Service not yet running...`);
         // Wait for a second before checking again
         await new Promise(resolve => setTimeout(resolve, interval));
       }
@@ -97,15 +211,12 @@ export async function installGoodKey(distDir: string, systemDir: string) {
       throw new Error('Service did not start within the expected time.');
     }
 
-    // Get User status using `gkutils auth status` and log it
-    // const { stdout } = await execAsync(`${path.join(systemDir, utilFile)} auth status`);
-    // console.log(stdout);
-    // Error: Installation of GoodKey failed: rpc error: code = Unknown desc = Client for GoodKey Server is not initialized. Run 'gkutils auth register' to authenticate.
+    core.info(`   ✅ Service is running`);
   } catch (error) {
     if (error instanceof Error) {
-      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      const stack = 'error' in error && error.error ? error.error.toString() : error.stack;
-      throw new Error(`Installation of GoodKey failed: ${message}, ${stack}`);
+      const commandError = asCommandExecutionError(error);
+      const stack = commandError.stack ? `, ${commandError.stack}` : '';
+      throw new Error(`${generateErrorMessage('Installation of GoodKey failed', commandError)}${stack}`);
     }
     throw error;
   }
@@ -113,12 +224,18 @@ export async function installGoodKey(distDir: string, systemDir: string) {
 
 export async function registerUser(token: string, organizationId: string) {
   try {
-    const { stdout } = await execAsync(`${path.join(SYSTEM_ROOT, 'System32', utilFile)} auth register -t ${token} -o ${organizationId}`);
-    console.log(stdout);
+    core.info(`🔑 Authenticating with GoodKey service...`);
+    const utilPath = path.join(SYSTEM_ROOT, 'System32', utilFile);
+    core.debug(`   Using utility: ${utilPath}`);
+    core.debug(`   Organization: ${organizationId}`);
+    const { stdout } = await execAsync(`${utilPath} auth register -t ${token} -o ${organizationId}`);
+    if (stdout.trim()) {
+      core.debug(`   ${stdout.trim()}`);
+    }
+    core.info(`   ✅ Authentication successful`);
   } catch (error) {
     if (error instanceof Error) {
-      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      throw new Error(`Registration of user failed: ${message}`);
+      throw new Error(generateErrorMessage('Registration of user failed', asCommandExecutionError(error)));
     }
     throw error;
   }
@@ -144,30 +261,41 @@ function globFilePathString(filePath: string): string[] {
     .map(pathString => pathString.split(path.sep).join("/"))
     .map(pattern => globSync(pattern, { mark: true }))
     .filter((globResult) => globResult.length)
-    .reduce((accumulated, current) => accumulated.concat(current), [])
+    .reduce((accumulated, current) => accumulated.concat(current), []);
 }
 
 export async function signFile(options: SignOptions) {
   try {
+    core.debug(`🔍 Locating signtool.exe...`);
     const signtool = await getSignToolPath();
+    core.debug(`   Found: ${signtool}`);
+
     // signtool.exe sign /v /fd sha256 /a "file" /sha1 "hex(sha1(cert))"
     const args: Record<string, string | string[]> = {};
+
+    core.debug(`⚙️ Configuring signing options...`);
     if (options.timestampUrl) {
       args['t'] = options.timestampUrl;
+      core.debug(`   Timestamp URL: ${options.timestampUrl}`);
     }
     if (options.timestampRfc3161Url) {
       args['tr'] = options.timestampRfc3161Url;
+      core.debug(`   Timestamp RFC3161 URL: ${options.timestampRfc3161Url}`);
     }
     if (options.timestampDigestAlgorithm) {
       args['td'] = options.timestampDigestAlgorithm;
+      core.debug(`   Timestamp digest algorithm: ${options.timestampDigestAlgorithm}`);
     }
     if (options.description) {
       args['d'] = options.description;
+      core.debug(`   Description: ${options.description}`);
     }
     if (options.descriptionUrl) {
       args['du'] = options.descriptionUrl;
+      core.debug(`   Description URL: ${options.descriptionUrl}`);
     }
     if (options.additionalCertificates) {
+      core.debug(`   Processing additional certificates...`);
       const certs = new X509Certificates(options.additionalCertificates);
 
       const ac: string[] = [];
@@ -175,13 +303,15 @@ export async function signFile(options: SignOptions) {
       for (const cert of certs) {
         const thumbprint = await cert.getThumbprint();
         const certFile = path.join(__dirname, `${Buffer.from(new Uint8Array(thumbprint)).toString('hex')}.cer`);
-        await fs.writeFile(certFile, Buffer.from(new Uint8Array(cert.rawData)));
+        await fs.writeFile(certFile, new Uint8Array(cert.rawData));
+        core.debug(`   Added certificate: ${certFile}`);
         ac.push(certFile);
       }
       args['ac'] = ac;
     }
     if (options.fileDigestAlgorithm) {
       args['fd'] = options.fileDigestAlgorithm;
+      core.debug(`   File digest algorithm: ${options.fileDigestAlgorithm}`);
     }
 
     let argsString = '';
@@ -197,39 +327,54 @@ export async function signFile(options: SignOptions) {
     }
 
     const command = `"${signtool}" sign /v /sha1 ${options.certificate} ${argsString} "${options.file}"`;
-    console.log(command);
+    core.debug(`🖊️ Executing signtool command...`);
+    core.debug(`   Command: ${command}`);
     const { stdout, stderr } = await execAsync(command);
-    console.log(stdout);
-    console.log(stderr);
+    if (stdout.trim()) {
+      core.debug(`   stdout: ${stdout.trim()}`);
+    }
+    if (stderr.trim()) {
+      core.debug(`   stderr: ${stderr.trim()}`);
+    }
+    core.info(`   ✅ File signed successfully: ${options.file}`);
   } catch (error) {
     if (error instanceof Error) {
-      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      throw new Error(`Signing of file failed: ${message}`);
+      throw new Error(generateErrorMessage('Signing of file failed', asCommandExecutionError(error)));
     }
     throw error;
   }
 }
 
 export async function sign(options: SignOptions) {
+  core.info(`🔎 Searching for files matching pattern: ${options.file}`);
   const filePaths = globFilePathString(options.file);
 
   if (filePaths.length === 0) {
     throw Error(`Files by specified pattern "${options.file}" did not match any files`);
   }
 
-  for (const filePath of filePaths) {
+  core.info(`📝 Found ${filePaths.length} file(s) to sign:`);
+  filePaths.forEach((fp, index) => {
+    core.info(`   ${index + 1}. ${fp}`);
+  });
+
+  for (let i = 0; i < filePaths.length; i++) {
+    const filePath = filePaths[i];
+    core.info(`📄 Signing file ${i + 1}/${filePaths.length}: ${filePath}`);
     await signFile({
       ...options,
       file: filePath,
     });
   }
 
+  core.info(`✅ Successfully signed ${filePaths.length} file(s)`);
 }
 
 export async function getSignToolPath(): Promise<string> {
   const rootDir = 'C:\\Program Files (x86)\\Windows Kits';
   const signtoolName = 'signtool.exe';
 
+  core.debug(`   Searching in: ${rootDir}`);
   const directories = [rootDir];
 
   while (directories.length > 0) {
@@ -244,6 +389,7 @@ export async function getSignToolPath(): Promise<string> {
 
       const stat = await fs.stat(absolutePath);
       if (file === signtoolName && stat.isFile()) {
+        core.debug(`   ✅ Found signtool at: ${absolutePath}`);
         return absolutePath;
       } else if (stat.isDirectory()) {
         directories.push(absolutePath);
