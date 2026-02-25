@@ -17,7 +17,7 @@ jobs:
         with:
           organization: ${{ secrets.ORGANIZATION }}
           token: ${{ secrets.TOKEN }}
-          certificate: "84f06ea86c3ebb39f72911cd167769711a57ad87"
+          certificate: "3c62553ee7d002d7bf1ec613e6b6836a83c3f5cb"
           file: "*.dll"
           timestamp_rfc3161_url: "http://timestamp.digicert.com"
           timestamp_digest_algorithm: "sha256"
