@@ -13,6 +13,16 @@ const ORGANIZATION = 'organization';
 const CERTIFICATE = 'certificate';
 const FILE = 'file';
 
+type ActionError = Error & {
+  code?: number | string | null;
+  exitCode?: number | null;
+};
+
+function getErrorCode(error: Error): number | string | null | undefined {
+  const typedError = error as ActionError;
+  return typedError.code ?? typedError.exitCode;
+}
+
 async function run() {
   const startTime = Date.now();
   core.info('🚀 Starting GoodKey Windows SignTool Action');
@@ -81,7 +91,7 @@ async function run() {
   catch (error) {
     core.endGroup(); // Ensure group is closed on error
     if (error instanceof Error) {
-      const code = (error as any).code;
+      const code = getErrorCode(error);
       core.setFailed(code !== undefined ? `${error.message} (code=${code})` : error.message);
     } else {
       core.setFailed(`Unknown error: ${error}`);

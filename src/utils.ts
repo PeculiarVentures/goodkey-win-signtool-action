@@ -19,19 +19,89 @@ const certProvFile = 'gkcertsvc.dll';
 const utilFile = 'gkutils.exe';
 const allFiles = [serviceFile, keyProvFile, certProvFile, utilFile];
 
-const execAsync = (command: string) => {
-  return new Promise<{ stdout: string, stderr: string; exitCode?: number | null }>((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      const code = (error as any)?.code;
-      const signal = (error as any)?.signal;
+type CommandExecutionError = Error & {
+  code?: number | string | null;
+  exitCode?: number | null;
+  signal?: NodeJS.Signals | string | null;
+  stdout?: string;
+  stderr?: string;
+};
 
+function asCommandExecutionError(error: unknown): CommandExecutionError {
+  return error as CommandExecutionError;
+}
+
+function generateErrorMessage(prefix: string, error: CommandExecutionError): string {
+  const output = error.stdout?.toString().trim();
+  const message = output || error.message;
+  const code = error.code ?? error.exitCode;
+  const codeInfo = code !== undefined && code !== null ? ` (code=${code})` : '';
+  return `${prefix}: ${message}${codeInfo}`;
+}
+
+function buildCommandFailureMessage(command: string, error: CommandExecutionError): string {
+  const code = error.code;
+  const signal = error.signal;
+  const codeInfo = code !== undefined ? ` (code=${code})` : '';
+  const signalInfo = signal ? ` (signal=${signal})` : '';
+  const stderr = error.stderr?.toString().trim();
+  const stderrInfo = stderr ? `\n${stderr}` : '';
+  return `Command failed${codeInfo}${signalInfo}: ${command}${stderrInfo}`;
+}
+
+async function getRegsvr32Path(): Promise<string> {
+  const system32 = path.join(SYSTEM_ROOT, 'System32', 'regsvr32.exe');
+  const candidates: string[] = [system32];
+
+  if (process.arch === 'ia32' && process.env.PROCESSOR_ARCHITEW6432) {
+    candidates.unshift(path.join(SYSTEM_ROOT, 'Sysnative', 'regsvr32.exe'));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // Continue searching
+    }
+  }
+
+  try {
+    const { stdout } = await execAsync('where.exe regsvr32.exe');
+    const found = stdout.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+    if (found) {
+      return found;
+    }
+  } catch {
+    // Continue searching
+  }
+
+  try {
+    const psCommand = 'powershell -NoProfile -Command "(Get-Command regsvr32 -ErrorAction SilentlyContinue).Source"';
+    const { stdout } = await execAsync(psCommand);
+    const found = stdout.trim();
+    if (found) {
+      return found;
+    }
+  } catch {
+    // Continue searching
+  }
+
+  return 'regsvr32.exe';
+}
+
+const execAsync = (command: string) => {
+  return new Promise<{ stdout: string, stderr: string; exitCode?: number | null; }>((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
       if (error) {
-        const execError = new Error(`Command failed${code !== undefined ? ` (code=${code})` : ``}${signal ? ` (signal=${signal})` : ``}: ${command}\n${stderr}`);
-        (execError as any).code = code;
-        (execError as any).exitCode = code;
-        (execError as any).signal = signal;
-        (execError as any).stdout = stdout;
-        (execError as any).stderr = stderr;
+        const baseError = asCommandExecutionError(error);
+        const execError = new Error('') as CommandExecutionError;
+        execError.code = baseError.code;
+        execError.exitCode = typeof baseError.code === 'number' ? baseError.code : null;
+        execError.signal = baseError.signal;
+        execError.stdout = stdout;
+        execError.stderr = stderr;
+        execError.message = buildCommandFailureMessage(command, execError);
         reject(execError);
       } else {
         resolve({ stdout, stderr, exitCode: 0 });
@@ -70,8 +140,7 @@ export async function getSignToolFiles(distDir: string, zipName: string, version
     core.info(`   ✅ Extraction complete`);
   } catch (error) {
     if (error instanceof Error) {
-      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      throw new Error(`Failed to download files archive: ${message}`);
+      throw new Error(generateErrorMessage('Failed to download files archive', asCommandExecutionError(error)));
     }
     throw error;
   }
@@ -90,33 +159,22 @@ export async function installGoodKey(distDir: string, systemDir: string) {
 
     core.info(`🔧 Registering DLLs...`);
     core.debug(`   Registering: ${keyProvFile}`);
+    const regsvr32Path = await getRegsvr32Path();
 
-    let regsvr32Path = path.join(SYSTEM_ROOT, 'System32', 'regsvr32.exe');
-    if (process.arch === 'ia32' && process.env.PROCESSOR_ARCHITEW6432) {
-      // 32-bit Node on 64-bit Windows — try Sysnative to reach 64-bit regsvr32
-      const sysnative = path.join(SYSTEM_ROOT, 'Sysnative', 'regsvr32.exe');
-      try {
-        await fs.access(sysnative);
-        regsvr32Path = sysnative;
-      } catch (err) {
-        // Sysnative not available — System32/SysWOW64 redirection may apply
-      }
-    }
-
-    // Temporarily disable /s (silent) so we can see regsvr32 output in CI logs
     try {
       await execAsync(`"${regsvr32Path}" /s "${path.join(systemDir, keyProvFile)}"`);
-    } catch (err) {
+    } catch (error) {
+      const commandError = asCommandExecutionError(error);
       // Some Windows crashes produce STATUS_STACK_BUFFER_OVERRUN (0xC0000409 / 3221226505)
       // Node/Windows may surface this as a large unsigned number or as its signed 32-bit equivalent.
-      const code = (err as any)?.code ?? (err as any)?.exitCode;
+      const code = commandError.code ?? commandError.exitCode;
       const ignoredCodes = new Set<number | null>([3221226505, -1073740791]);
-      if (code != null && ignoredCodes.has(code)) {
-        const stdout = (err as any)?.stdout ?? '';
-        const stderr = (err as any)?.stderr ?? '';
-        core.warning(`Registering ${keyProvFile} returned STATUS_STACK_BUFFER_OVERRUN (0xC0000409) (code=${code}) — temporarily ignored. stderr: ${stderr}`);
+      if (typeof code === 'number' && ignoredCodes.has(code)) {
+        const stderr = commandError.stderr?.toString().trim();
+        const stderrInfo = stderr ? `; stderr: ${stderr}` : '';
+        core.warning(`Registering ${keyProvFile} returned STATUS_STACK_BUFFER_OVERRUN (0xC0000409) (code=${code}) — temporarily ignored${stderrInfo}`);
       } else {
-        throw err;
+        throw error;
       }
     }
 
@@ -156,10 +214,9 @@ export async function installGoodKey(distDir: string, systemDir: string) {
     core.info(`   ✅ Service is running`);
   } catch (error) {
     if (error instanceof Error) {
-      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      const stack = 'error' in error && error.error ? error.error.toString() : error.stack;
-      const codeInfo = (error as any).code !== undefined ? ` (code=${(error as any).code})` : '';
-      throw new Error(`Installation of GoodKey failed: ${message}${codeInfo}, ${stack}`);
+      const commandError = asCommandExecutionError(error);
+      const stack = commandError.stack ? `, ${commandError.stack}` : '';
+      throw new Error(`${generateErrorMessage('Installation of GoodKey failed', commandError)}${stack}`);
     }
     throw error;
   }
@@ -178,9 +235,7 @@ export async function registerUser(token: string, organizationId: string) {
     core.info(`   ✅ Authentication successful`);
   } catch (error) {
     if (error instanceof Error) {
-      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      const codeInfo = (error as any).code !== undefined ? ` (code=${(error as any).code})` : '';
-      throw new Error(`Registration of user failed: ${message}${codeInfo}`);
+      throw new Error(generateErrorMessage('Registration of user failed', asCommandExecutionError(error)));
     }
     throw error;
   }
@@ -248,7 +303,7 @@ export async function signFile(options: SignOptions) {
       for (const cert of certs) {
         const thumbprint = await cert.getThumbprint();
         const certFile = path.join(__dirname, `${Buffer.from(new Uint8Array(thumbprint)).toString('hex')}.cer`);
-        await fs.writeFile(certFile, Buffer.from(new Uint8Array(cert.rawData)));
+        await fs.writeFile(certFile, new Uint8Array(cert.rawData));
         core.debug(`   Added certificate: ${certFile}`);
         ac.push(certFile);
       }
@@ -284,9 +339,7 @@ export async function signFile(options: SignOptions) {
     core.info(`   ✅ File signed successfully: ${options.file}`);
   } catch (error) {
     if (error instanceof Error) {
-      const message = 'stdout' in error && error.stdout ? error.stdout.toString() : error.message;
-      const codeInfo = (error as any).code !== undefined ? ` (code=${(error as any).code})` : '';
-      throw new Error(`Signing of file failed: ${message}${codeInfo}`);
+      throw new Error(generateErrorMessage('Signing of file failed', asCommandExecutionError(error)));
     }
     throw error;
   }
